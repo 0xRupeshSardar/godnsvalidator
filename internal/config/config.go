@@ -28,7 +28,7 @@ func ParseFlags() *Config {
 	flag.StringVar(&cfg.RootDomain, "r", "bet365.com", "Root domain for validation")
 	flag.StringVar(&cfg.Query, "q", "dnsvalidator", "Validation query prefix")
 	flag.IntVar(&cfg.Threads, "t", 5, "Number of worker threads")
-	flag.IntVar(&cfg.Timeout, "timeout", 5, "DNS query timeout in seconds")
+	flag.IntVar(&cfg.Timeout, "timeout", 10, "DNS query timeout in seconds")
 	flag.BoolVar(&cfg.NoColor, "no-color", false, "Disable color output")
 	flag.BoolVar(&cfg.Verbose, "v", false, "Verbose output")
 	flag.BoolVar(&cfg.Silent, "silent", false, "Silent mode")
@@ -58,37 +58,48 @@ func loadTargets(source string) []string {
 }
 
 func loadFile(path string) []string {
-	file, err := os.Open(path)
-	if err != nil {
-		fmt.Printf("Error opening file: %v\n", err)
-		return nil
-	}
-	defer file.Close()
+    file, err := os.Open(path)
+    if err != nil {
+        fmt.Printf("Error opening file: %v\n", err)
+        return nil
+    }
+    defer file.Close()
 
-	var targets []string
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		if target := strings.TrimSpace(scanner.Text()); target != "" {
-			targets = append(targets, target)
-		}
-	}
-	return targets
+    var targets []string
+    scanner := bufio.NewScanner(file)
+    for scanner.Scan() {
+        if target := strings.TrimSpace(scanner.Text()); target != "" {
+            targets = append(targets, target)
+        }
+    }
+    if err := scanner.Err(); err != nil {
+        fmt.Printf("Error reading file: %v\n", err)
+    }
+    return targets
 }
 
 func loadHTTP(url string) []string {
-	resp, err := http.Get(url)
-	if err != nil {
-		fmt.Printf("Error fetching URL: %v\n", err)
-		return nil
-	}
-	defer resp.Body.Close()
+    resp, err := http.Get(url)
+    if err != nil {
+        fmt.Printf("Error fetching URL: %v\n", err)
+        return nil
+    }
+    defer resp.Body.Close()
 
-	var targets []string
-	scanner := bufio.NewScanner(resp.Body)
-	for scanner.Scan() {
-		if target := strings.TrimSpace(scanner.Text()); target != "" {
-			targets = append(targets, target)
-		}
-	}
-	return targets
+    if resp.StatusCode != http.StatusOK {
+        fmt.Printf("Error: got status code %d\n", resp.StatusCode)
+        return nil
+    }
+
+    var targets []string
+    scanner := bufio.NewScanner(resp.Body)
+    for scanner.Scan() {
+        if target := strings.TrimSpace(scanner.Text()); target != "" {
+            targets = append(targets, target)
+        }
+    }
+    if err := scanner.Err(); err != nil {
+        fmt.Printf("Error reading response: %v\n", err)
+    }
+    return targets
 }

@@ -30,12 +30,13 @@ func ValidateServers(ctx context.Context, cfg *config.Config, baseline *resolver
 			select {
 			case work <- t:
 			case <-ctx.Done():
-				break
+				// Return to stop the entire loop
+				return
 			}
 		}
 		close(work)
 	}()
-
+	
 	wg.Wait()
 }
 
@@ -55,51 +56,52 @@ func filterTargets(cfg *config.Config) []string {
 	return filtered
 }
 
-func worker(ctx context.Context, wg *sync.WaitGroup, work <-chan string, 
-	cfg *config.Config, baseline *resolver.Baseline) {
-	defer wg.Done()
 
-	for server := range work {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			if validateServer(server, cfg, baseline) {
-				mu.Lock()
-				ValidServers = append(ValidServers, server)
-				mu.Unlock()
-			}
-		}
-	}
+func worker(ctx context.Context, wg *sync.WaitGroup, work <-chan string,
+    cfg *config.Config, baseline *resolver.Baseline) {
+    defer wg.Done()
+
+    for server := range work {
+        select {
+        case <-ctx.Done():
+            return
+        default:
+            if validateServer(ctx, server, cfg, baseline) {
+                mu.Lock()
+                ValidServers = append(ValidServers, server)
+                mu.Unlock()
+            }
+        }
+    }
 }
 
-func validateServer(server string, cfg *config.Config, baseline *resolver.Baseline) bool {
-	// Check NXDOMAIN for known domains
-	for _, domain := range []string{"facebook.com", "google.com"} {
-		testDomain := utils.RandomString(10) + "." + domain
-		_, err := resolver.Resolve(context.Background(), testDomain, net.JoinHostPort(server, "53"), cfg.Timeout)
-		if err == nil {
-			return false
-		}
-	}
+func validateServer(ctx context.Context, server string, cfg *config.Config, baseline *resolver.Baseline) bool {
+    // Check NXDOMAIN for known domains
+    for _, domain := range []string{"facebook.com", "google.com"} {
+        testDomain := utils.RandomString(10) + "." + domain
+        _, err := resolver.Resolve(ctx, testDomain, net.JoinHostPort(server, "53"), cfg.Timeout)
+        if err == nil {
+            return false
+        }
+    }
 
-	// Check root domain resolution
-	ips, err := resolver.Resolve(context.Background(), cfg.RootDomain, net.JoinHostPort(server, "53"), cfg.Timeout)
-	if err != nil || len(ips) == 0 {
-		return false
-	}
+    // Check root domain resolution
+    ips, err := resolver.Resolve(ctx, cfg.RootDomain, net.JoinHostPort(server, "53"), cfg.Timeout)
+    if err != nil || len(ips) == 0 {
+        return false
+    }
 
-	// Validate against baseline IP
-	if ips[0] != baseline.GoodIP {
-		return false
-	}
+    // Validate against baseline IP
+    if baseline == nil || ips[0] != baseline.GoodIP {
+        return false
+    }
 
-	// Check random subdomain NXDOMAIN
-	testDomain := utils.RandomString(10) + "." + cfg.RootDomain
-	_, nxErr := resolver.Resolve(context.Background(), testDomain, net.JoinHostPort(server, "53"), cfg.Timeout)
-	if !resolver.IsNXDomain(nxErr) {
-		return false
-	}
+    // Check random subdomain NXDOMAIN
+    testDomain := utils.RandomString(10) + "." + cfg.RootDomain
+    _, nxErr := resolver.Resolve(ctx, testDomain, net.JoinHostPort(server, "53"), cfg.Timeout)
+    if !resolver.IsNXDomain(nxErr) {
+        return false
+    }
 
-	return true
+    return true
 }

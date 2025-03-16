@@ -7,7 +7,7 @@ import (
 )
 
 func init() {
-	rand.New(rand.NewSource(time.Now().UnixNano()))
+    rand.Seed(time.Now().UnixNano())
 }
 
 func RandomString(length int) string {

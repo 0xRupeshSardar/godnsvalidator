@@ -2,7 +2,7 @@ package resolver
 
 import (
 	"context"
-	"net"
+	// "net"
 	"strings"
 	"time"
 
@@ -17,15 +17,23 @@ type Baseline struct {
 }
 
 func GetBaseline(cfg *config.Config) *Baseline {
-	baselineServers := []string{"1.1.1.1:53", "8.8.8.8:53"}
-	
-	for _, server := range baselineServers {
-		ip, nx := checkBaselineServer(server, cfg)
-		if ip != "" {
-			return &Baseline{GoodIP: ip, NXDomain: nx}
-		}
-	}
-	return nil
+    baselineServers := []string{
+        "1.1.1.1:53",     // Cloudflare
+        "8.8.8.8:53",     // Google
+        "9.9.9.9:53",     // Quad9
+        "94.140.14.14:53", // AdGuard
+    }
+
+    for _, server := range baselineServers {
+        fmt.Printf("Testing baseline server: %s\n", server)
+        ip, nx := checkBaselineServer(server, cfg)
+        if ip != "" {
+            fmt.Printf("Baseline established with %s -> IP: %s\n", server, ip)
+            return &Baseline{GoodIP: ip, NXDomain: nx}
+        }
+        fmt.Printf("Failed to use %s as baseline\n", server)
+    }
+    return nil
 }
 
 func checkBaselineServer(server string, cfg *config.Config) (string, bool) {
@@ -56,7 +64,7 @@ func checkBaselineServer(server string, cfg *config.Config) (string, bool) {
 	nxDomain := utils.RandomString(10) + "." + cfg.RootDomain
 	_, nxErr := Resolve(context.Background(), nxDomain, server, cfg.Timeout)
 
-	return rootIPs[0], isNXDomain(nxErr)
+	return rootIPs[0], IsNXDomain(nxErr)
 }
 
 func Resolve(ctx context.Context, domain, server string, timeout int) ([]string, error) {
@@ -78,9 +86,10 @@ func Resolve(ctx context.Context, domain, server string, timeout int) ([]string,
 	return ips, nil
 }
 
-func isNXDomain(err error) bool {
+func IsNXDomain(err error) bool {
 	if err == nil {
 		return false
 	}
 	return strings.Contains(err.Error(), "NXDOMAIN")
 }
+

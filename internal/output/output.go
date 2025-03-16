@@ -61,10 +61,16 @@ func LogServer(server, message string, cfg *config.Config) {
 }
 
 func WriteResults(cfg *config.Config) {
-	if fileHandle != nil {
-		fileMu.Lock()
-		defer fileMu.Unlock()
-		fileHandle.Sync()
-		fileHandle.Close()
-	}
+    if fileHandle != nil {
+        fileMu.Lock()
+        defer fileMu.Unlock()
+
+        if err := fileHandle.Sync(); err != nil {
+            Error("Error flushing file: %v", err)
+        }
+
+        if err := fileHandle.Close(); err != nil {
+            Error("Error closing file: %v", err)
+        }
+    }
 }
