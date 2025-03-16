@@ -1,0 +1,10 @@
+bin/
+dist/
+*.exe
+*.log
+.DS_Store
+.idea/
+.vscode/
+coverage.txt
+go.sum
+/godnsvalidator
